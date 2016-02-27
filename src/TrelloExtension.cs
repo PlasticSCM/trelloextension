@@ -137,7 +137,7 @@ namespace Codice.Client.IssueTracker.Trello
         internal const string EMAIL_KEY = "E-mail";
         internal const string PASSWORD_KEY = "Password";
         internal const string BRANCH_PREFIX_KEY = "Branch prefix";
-        internal const string TOKEN_URL_KEY = "Log in here to retrieve the token";
+        internal const string LOGIN_URL = "Login URL";
         internal const string TOKEN_KEY = "API token";
 
         internal const string API_KEY = "fe72b23308f2a49cb5591615fc99aa1d";

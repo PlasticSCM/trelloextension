@@ -50,14 +50,24 @@ namespace Codice.Client.IssueTracker.Trello
                 IsGlobal = true
             });
 
+            parameters.Add(new IssueTrackerConfigurationParameter
+            {
+                Name = "TOKEN_LABEL",
+                Value = string.Format(
+                    "Open the URL below to log in to Trello and retrieve the {0}.",
+                    TrelloExtension.TOKEN_KEY),
+                Type = IssueTrackerConfigurationParameterType.Label,
+                IsGlobal = true
+            });
+
             ITrello trello = new TrelloNet.Trello(TrelloExtension.API_KEY);
             var url = trello.GetAuthorizationUrl(
                 "Plastic SCM Trello Extension", Scope.ReadWrite, Expiration.Never);
 
             parameters.Add(new IssueTrackerConfigurationParameter
             {
-                Name = TrelloExtension.TOKEN_URL_KEY,
-                Value = string.Format("{0}", url),
+                Name = TrelloExtension.LOGIN_URL,
+                Value = url.ToString(),
                 Type = IssueTrackerConfigurationParameterType.Text,
                 IsGlobal = true
             });
