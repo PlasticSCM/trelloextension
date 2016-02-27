@@ -56,11 +56,9 @@ namespace Codice.Client.IssueTracker.Trello
 
             parameters.Add(new IssueTrackerConfigurationParameter
             {
-                Name = TrelloExtension.TOKEN_LABEL_KEY,
-                Value = string.Format(
-                    "Browse to {0} to log in to Trello and copy the token you'll found in the box below",
-                    url),
-                Type = IssueTrackerConfigurationParameterType.Label,
+                Name = TrelloExtension.TOKEN_URL_KEY,
+                Value = string.Format("{0}", url),
+                Type = IssueTrackerConfigurationParameterType.Text,
                 IsGlobal = true
             });
 
