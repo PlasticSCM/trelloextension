@@ -81,6 +81,15 @@ namespace Codice.Client.IssueTracker.Trello
                 IsGlobal = false
             });
 
+            parameters.Add(new IssueTrackerConfigurationParameter
+            {
+                Name = TrelloExtension.BOARD_URL_KEY,
+                Value = GetValidParameterValue(
+                    config, TrelloExtension.BOARD_URL_KEY, string.Empty),
+                Type = IssueTrackerConfigurationParameterType.Text,
+                IsGlobal = true
+            });
+
             return parameters;
         }
 

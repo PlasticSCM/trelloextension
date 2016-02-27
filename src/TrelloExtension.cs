@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 
 using log4net;
 using TrelloNet;
@@ -29,6 +31,8 @@ namespace Codice.Client.IssueTracker.Trello
                 return;
             }
 
+            mBoard = GetBoardFromConfig();
+
             mLog.Debug("Log in successful!");
         }
 
@@ -45,58 +49,87 @@ namespace Codice.Client.IssueTracker.Trello
 
         public List<PlasticTask> GetPendingTasks()
         {
-            List<PlasticTask> tasks = new List<PlasticTask>();
-            foreach (Card card in mTrello.Cards.Search("is:open", MAX_RESULTS))
-            {
-                tasks.Add(GetPlasticTaskFromCard(card));
-            }
-            return tasks;
+            return mTrello.Cards.Search(
+                ONLY_OPEN_CARDS_QUERY, MAX_RESULTS, GetSearchFilter())
+                .Select(card => GetPlasticTaskFromCard(card)).ToList();
         }
 
         public List<PlasticTask> GetPendingTasks(string assignee)
         {
-            return GetPendingTasks();
+            return mTrello.Cards.ForMe(CardFilter.Open)
+                .Where(card => mBoard == null || card.IdBoard == mBoard.GetBoardId())
+                .Select(card => GetPlasticTaskFromCard(card))
+                .ToList();
         }
 
         public PlasticTask GetTaskForBranch(string fullBranchName)
         {
-            // TODO
-            return null;
+            var card = GetCardFromId(ExtractCardIdFromBranch(fullBranchName));
+
+            if (card == null)
+                return null;
+
+            return GetPlasticTaskFromCard(card);
         }
 
         public Dictionary<string, PlasticTask> GetTasksForBranches(
             List<string> fullBranchNames)
         {
-            // TODO
-            return new Dictionary<string, PlasticTask>();
+            var result = new Dictionary<string, PlasticTask>();
+
+            foreach (string fullBranchName in fullBranchNames)
+                result.Add(fullBranchName, GetTaskForBranch(fullBranchName));
+
+            return result;
         }
 
         public List<PlasticTask> LoadTasks(List<string> taskIds)
         {
-            // TODO
-            return new List<PlasticTask>();
+            var cards = taskIds.Select(cardId => GetCardFromId(cardId));
+
+            return cards.Select(card => GetPlasticTaskFromCard(card)).ToList();
         }
 
         public void LogCheckinResult(
             PlasticChangeset changeset, List<PlasticTask> tasks)
         {
-            // TODO
+            var cards = tasks.Select(task => GetCardFromId(task.Id));
+
+            foreach (Card card in cards)
+            {
+                if (card == null)
+                    continue;
+
+                mTrello.Cards.AddComment(card, GetPrintableChangeset(changeset));
+            }
         }
 
         public void MarkTaskAsOpen(string taskId, string assignee)
         {
-            // TODO
+            Card card = GetCardFromId(taskId);
+
+            if (card == null)
+                return;
+
+            mTrello.Cards.AddMember(card, mTrello.Members.Me());
         }
 
         public void OpenTaskExternally(string taskId)
         {
-            // TODO
+            Card card = GetCardFromId(taskId);
+
+            if (card == null)
+                return;
+
+            Process.Start(card.Url);
         }
 
         public bool TestConnection(IssueTrackerConfiguration configuration)
         {
-            // TODO
-            return false;
+            mTrello.Authorize(configuration.GetValue(
+                configuration.GetValue(TOKEN_KEY)));
+            mTrello.Deauthorize();
+            return true;
         }
 
         public void UpdateLinkedTasksToChangeset(
@@ -105,11 +138,64 @@ namespace Codice.Client.IssueTracker.Trello
             // TODO
         }
 
+        Card GetCardFromId(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId))
+                return null;
+
+            if (mBoard == null)
+            {
+                try
+                {
+                    return mTrello.Cards.WithId(cardId);
+                }
+                catch (Exception e)
+                {
+                    mLog.ErrorFormat(
+                        "Unable to retrieve card with ID '{0}': {1}", cardId, e.Message);
+                    return null;
+                }
+            }
+
+            int shortId;
+            if (!int.TryParse(cardId, out shortId))
+            {
+                mLog.ErrorFormat(
+                    "Unable to parse card short ID '{0}'", cardId);
+                return null;
+            }
+
+            return mTrello.Cards.WithShortId(shortId, mBoard);
+        }
+
+        Board GetBoardFromConfig()
+        {
+            var boardUrl = mConfig.GetValue(BOARD_URL_KEY);
+
+            if (string.IsNullOrEmpty(boardUrl))
+                return null;
+
+            try
+            {
+                return mTrello.Boards.ForMe()
+                    .Where(board => board.Url == boardUrl).Single();
+            }
+            catch(Exception e)
+            {
+                mLog.ErrorFormat(
+                    "Unable to retrieve board '{0}': {1}", boardUrl, e.Message);
+                return null;
+            }
+        }
+
         PlasticTask GetPlasticTaskFromCard(Card card)
         {
+            if (card == null)
+                return null;
+
             return new PlasticTask
             {
-                Id = card.Id,
+                Id = (mBoard != null) ? card.IdShort.ToString() : card.Id,
                 Owner = GetMembersString(card),
                 Status = "Open",
                 Title = card.Name,
@@ -119,18 +205,62 @@ namespace Codice.Client.IssueTracker.Trello
 
         string GetMembersString(Card card)
         {
-            List<string> memberNames = new List<string>();
+            if (card.IdMembers.Count == 0)
+                return string.Empty;
 
-            foreach (Member member in mTrello.Members.ForCard(card))
-            {
-                memberNames.Add(member.FullName);
-            }
-            return string.Join(", ", memberNames);
+            return mTrello.Members.ForCard(card)
+                .Select(member => member.FullName)
+                .Aggregate((current, next) => current + ", " + next);
+        }
+
+        SearchFilter GetSearchFilter()
+        {
+            if (mBoard == null)
+                return null;
+
+            return new SearchFilter { Boards = new IBoardId[] { mBoard } };
+        }
+
+        string ExtractCardIdFromBranch(string fullBranchName)
+        {
+            var branchName = GetBranchName(fullBranchName);
+
+            if (string.IsNullOrEmpty(branchName))
+                return string.Empty;
+
+            var prefix = mConfig.GetValue(BRANCH_PREFIX_KEY) ?? string.Empty;
+            if (prefix == string.Empty)
+                return branchName;
+
+            if (!branchName.StartsWith(prefix) || prefix == branchName)
+                return string.Empty;
+
+            return branchName.Substring(prefix.Length);
+        }
+
+        string GetBranchName(string fullBranchName)
+        {
+            var lastSeparator = fullBranchName.LastIndexOf('/');
+
+            if (lastSeparator < 0)
+                return fullBranchName;
+
+            if (lastSeparator == fullBranchName.Length - 1)
+                return string.Empty;
+
+            return fullBranchName.Substring(lastSeparator + 1);
+        }
+
+        string GetPrintableChangeset(PlasticChangeset changeset)
+        {
+            // TODO
+            return string.Empty;
         }
 
         IssueTrackerConfiguration mConfig;
 
         ITrello mTrello;
+        Board mBoard;
 
         static readonly ILog mLog = LogManager.GetLogger("TrelloExtension");
 
@@ -139,9 +269,11 @@ namespace Codice.Client.IssueTracker.Trello
         internal const string BRANCH_PREFIX_KEY = "Branch prefix";
         internal const string LOGIN_URL = "Login URL";
         internal const string TOKEN_KEY = "API token";
+        internal const string BOARD_URL_KEY = "Board URL";
 
         internal const string API_KEY = "fe72b23308f2a49cb5591615fc99aa1d";
 
         const int MAX_RESULTS = 50;
+        const string ONLY_OPEN_CARDS_QUERY = "is:open";
     }
 }
