@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 
 using log4net;
 using TrelloNet;
@@ -135,7 +136,7 @@ namespace Codice.Client.IssueTracker.Trello
         public void UpdateLinkedTasksToChangeset(
             PlasticChangeset changeset, List<string> tasks)
         {
-            // TODO
+            // Not supported
         }
 
         Card GetCardFromId(string cardId)
@@ -253,8 +254,54 @@ namespace Codice.Client.IssueTracker.Trello
 
         string GetPrintableChangeset(PlasticChangeset changeset)
         {
-            // TODO
-            return string.Empty;
+            StringBuilder builder = new StringBuilder();
+            builder.AppendFormat("Date: {0}{1}", changeset.Date, Environment.NewLine);
+            builder.AppendFormat(
+                "Changeset: {0}@{1}@{2} by {3}{4}",
+                changeset.Id,
+                changeset.Repository,
+                changeset.RepositoryServer,
+                changeset.Owner,
+                Environment.NewLine);
+            builder.AppendFormat("Branch: {0}{1}", changeset.Branch, Environment.NewLine);
+            builder.AppendFormat("Comments: {0}{1}", changeset.Comment, Environment.NewLine);
+            builder.AppendFormat("Items:{0}", Environment.NewLine);
+
+            AppendItems(changeset, builder);
+
+            return builder.ToString();
+        }
+
+        void AppendItems(PlasticChangeset changeset, StringBuilder builder)
+        {
+            var changesets = new Stack<PlasticChangeset>();
+
+            changesets.Push(changeset);
+            while (changesets.Count > 0)
+            {
+                var currentCset = changesets.Pop();
+                if (currentCset == null)
+                    continue;
+
+                builder.AppendFormat(
+                    "  Changeset {0}@{1}{2}",
+                    currentCset.Id,
+                    currentCset.Repository,
+                    Environment.NewLine);
+
+                foreach (var item in currentCset.Items)
+                {
+                    builder.AppendFormat("  {0} {1}", item.Status, item.Name);
+                }
+
+                builder.AppendLine();
+
+                if (currentCset.Children == null)
+                    continue;
+
+                foreach (var child in currentCset.Children)
+                    changesets.Push(child);
+            }
         }
 
         IssueTrackerConfiguration mConfig;
