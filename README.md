@@ -37,6 +37,7 @@ Also, as required by Plastic SCM, two libraries are needed: `issuetrackerinterfa
 ## Pending improvements
 1. Add some tests!
 2. Improve login/authorization process.
-3. Link Trello.NET as Xlink/submodule as soon as the pull request gets merged.
-4. Think of a better way to reference cards when no panel is selected
-5. Use OAuth?
+3. Setup an automated build system - probably NAnt.
+4. Link Trello.NET as Xlink/submodule as soon as the pull request gets merged.
+5. Think of a better way to reference cards when no panel is selected.
+6. Use OAuth?
