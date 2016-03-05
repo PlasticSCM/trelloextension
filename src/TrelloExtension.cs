@@ -291,7 +291,8 @@ namespace Codice.Client.IssueTracker.Trello
 
                 foreach (var item in currentCset.Items)
                 {
-                    builder.AppendFormat("  {0} {1}", item.Status, item.Name);
+                    builder.AppendFormat(
+                        "  {0} {1}{2}", item.Status, item.Name, Environment.NewLine);
                 }
 
                 builder.AppendLine();
